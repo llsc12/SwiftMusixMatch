@@ -2,10 +2,23 @@ import XCTest
 @testable import SwiftMusixMatch
 
 final class SwiftMusixMatchTests: XCTestCase {
-    func testExample() throws {
+    func testResults() async throws {
         // This is an example of a functional test case.
         // Use XCTAssert and related functions to verify your tests produce the correct
         // results.
-        XCTAssertEqual(SwiftMusixMatch().text, "Hello, World!")
+        
+        let results = try await MusixMatchAPI.default.getSongs(for: "crystal dolphin")
+        for result in results {
+            print(result.title)
+        }
+    }
+    
+    func testLyrics() async throws {
+        let results = try await MusixMatchAPI.default.getSongs(for: "crystal dolphin")
+        
+        let song = results.first!
+        
+        let lyrics = try await song.getLyrics()
+        print(lyrics)
     }
 }
