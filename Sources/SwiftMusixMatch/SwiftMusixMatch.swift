@@ -105,11 +105,43 @@ public struct MMSearchResultItem {
         lyricElements.forEach { elm in
             guard let toAdd = try? elm.children().select("span").text() else { return }
             lyrics += toAdd
-            lyrics += "\n"
+            lyrics += " "
         }
+        
+        let lines = lyrics
+            .splitBefore(separator: { $0.isUpperCase })
+            .map{String($0).trimmingCharacters(in: .whitespacesAndNewlines)}
+        
         
         return lyrics
     }
+}
+
+extension Sequence {
+    func splitBefore(
+        separator isSeparator: (Iterator.Element) throws -> Bool
+    ) rethrows -> [AnySequence<Iterator.Element>] {
+        var result: [AnySequence<Iterator.Element>] = []
+        var subSequence: [Iterator.Element] = []
+
+        var iterator = self.makeIterator()
+        while let element = iterator.next() {
+            if try isSeparator(element) {
+                if !subSequence.isEmpty {
+                    result.append(AnySequence(subSequence))
+                }
+                subSequence = [element]
+            }
+            else {
+                subSequence.append(element)
+            }
+        }
+        result.append(AnySequence(subSequence))
+        return result
+    }
+}
+extension Character {
+    var isUpperCase: Bool { return (("A"..."Z").contains(String(self))) }
 }
 
 extension MMSearchResultItem: Identifiable {
