@@ -10,7 +10,7 @@ final class SwiftMusixMatchTests: XCTestCase {
         
         let results = try await MusixMatchAPI.default.getSongs(for: "crystal dolphin")
         for result in results {
-            print(result.title)
+            print("[Search Results] \(result.title)")
         }
         XCTAssert(results.count == 10)
     }
@@ -25,7 +25,7 @@ final class SwiftMusixMatchTests: XCTestCase {
         XCTAssert(lines.count > 5)
     }
     
-    func testTranslations() async throws {
+    func testGetTranslations() async throws {
         let results = try await MusixMatchAPI.default.getSongs(for: "crystal dolphin")
         
         let song = results.first!
@@ -35,5 +35,22 @@ final class SwiftMusixMatchTests: XCTestCase {
         translations.forEach { translation in
             print("[Translations Test] \(translation.lang) (\((translation.percentTranslated*100).rounded().description)% translated)")
         }
+        
+        XCTAssert(translations.count > 5)
+    }
+    
+    func testGetLyricsForTranslation() async throws {
+        let results = try await MusixMatchAPI.default.getSongs(for: "crystal dolphin")
+        
+        let song = results.first!
+        
+        let translations = try await song.getTranslations()
+        let translation = translations.filter { tr in
+            tr.lang.lowercased().contains("spanish")
+        }.first!
+        
+        let lyrics = try await song.getLyrics(translation)
+        let lines = lyrics.components(separatedBy: "\n")
+        XCTAssert(lines.count > 5)
     }
 }

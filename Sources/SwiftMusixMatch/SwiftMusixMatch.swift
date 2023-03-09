@@ -98,21 +98,54 @@ public struct MMSongItem {
     ///   - session: The URLSession to use, for advanced use.
     /// - Returns: Formatted lyrics string.
     public func getLyrics(_ translation: Translation? = nil, session: URLSession = URLSession.shared) async throws -> String {
-        let body = try await getPageBody((translation != nil ? translation!.path : nil), session: session)
-        
-        guard
-            let lyricElements = try? body.select(".mxm-lyrics__content")
-        else { throw MusixMatchAPI.MMParseError.couldNotExtractLyrics }
+        if let translation {
+            let body = try await getPageBody(translation.path, session: session)
 
-        
-        var lyrics = ""
-        lyricElements.forEach { elm in
-            guard let toAdd = try? elm.children().select("span").text(trimAndNormaliseWhitespace: false) else { return }
-            lyrics += toAdd
-            lyrics += "\n"
+            guard
+                let translatedLyricsContainer = try
+                    body
+                        .select(".mxm-lyrics.translated")
+                        .select(".row")
+                        .select(".col-xs-12.col-sm-12.col-md-12.col-ml-12.col-lg-12")
+                        .first()
+            else {
+                throw MusixMatchAPI.MMParseError.couldNotExtractLyrics
+            }
+            
+            var lyrics = ""
+            
+            let containerRows = translatedLyricsContainer.children()
+            
+            containerRows.forEach { containerRow in
+                if let innerRow = try? containerRow.select(".row>.col-xs-6.col-sm-6.col-md-6.col-ml-6.col-lg-6") {
+//                    let original = innerRow.first()
+                    let translation = innerRow.last()
+                    if let lyric = try? translation?.text() {
+                        lyrics += lyric
+                        lyrics += "\n"
+                    }
+                }
+            }
+            
+            return lyrics
+                    
+        } else {
+            let body = try await getPageBody(nil, session: session)
+            
+            guard
+                let lyricElements = try? body.select(".mxm-lyrics__content")
+            else { throw MusixMatchAPI.MMParseError.couldNotExtractLyrics }
+            
+            
+            var lyrics = ""
+            lyricElements.forEach { elm in
+                guard let toAdd = try? elm.children().select("span").text(trimAndNormaliseWhitespace: false) else { return }
+                lyrics += toAdd
+                lyrics += "\n"
+            }
+            
+            return lyrics
         }
-        
-        return lyrics
     }
     
     /// Gets all the available translations for this song.
