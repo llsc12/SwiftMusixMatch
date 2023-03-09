@@ -240,38 +240,11 @@ public struct MMSongItem {
     }
 }
 
-extension Sequence {
-    func splitBefore(
-        separator isSeparator: (Iterator.Element) throws -> Bool
-    ) rethrows -> [AnySequence<Iterator.Element>] {
-        var result: [AnySequence<Iterator.Element>] = []
-        var subSequence: [Iterator.Element] = []
-
-        var iterator = self.makeIterator()
-        while let element = iterator.next() {
-            if try isSeparator(element) {
-                if !subSequence.isEmpty {
-                    result.append(AnySequence(subSequence))
-                }
-                subSequence = [element]
-            }
-            else {
-                subSequence.append(element)
-            }
-        }
-        result.append(AnySequence(subSequence))
-        return result
-    }
-}
-extension Character {
-    var isUpperCase: Bool { return (("A"..."Z").contains(String(self))) }
-}
-
 extension MMSongItem: Identifiable {
     public var id: String { self.url.absoluteString }
 }
-extension MMSongItem: Comparable {
-    public static func < (lhs: MMSongItem, rhs: MMSongItem) -> Bool {
+extension MMSongItem: Equatable {
+    public static func == (lhs: MMSongItem, rhs: MMSongItem) -> Bool {
         lhs.id == rhs.id
     }
 }
