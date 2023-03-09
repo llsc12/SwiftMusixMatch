@@ -144,20 +144,22 @@ public struct MMSongItem {
         let translationData = try JSONSerialization.data(withJSONObject: translationsJson)
         let translationObjects = try JSONDecoder().decode([translationObj].self, from: translationData)
         
-        let finalObjects: [Translation] = translationObjects.compactMap { obj in
+        let optionalObjects: [Translation?] = translationObjects.map { obj in
             let engLocale = Locale(identifier: "en")
             
             let langSiteCodeFiltered = obj.to.filter { char in ("A"..."Z").contains(char.uppercased()) }
-            let langCode = Locale(identifier: langSiteCodeFiltered).languageCode!
+            guard let langCode = Locale(identifier: langSiteCodeFiltered).languageCode else { return nil }
             
             let fromLangSiteCodeFiltered = obj.to.filter { char in ("A"..."Z").contains(char.uppercased()) }
-            let fromLangCode = Locale(identifier: fromLangSiteCodeFiltered).languageCode!
+            guard let fromLangCode = Locale(identifier: fromLangSiteCodeFiltered).languageCode else { return nil }
             
-            let langName = engLocale.localizedString(forLanguageCode: langCode)!
-            let fromLangName = engLocale.localizedString(forLanguageCode: fromLangCode)!
+            guard let langName = engLocale.localizedString(forLanguageCode: langCode) else { return nil }
+            guard let fromLangName = engLocale.localizedString(forLanguageCode: fromLangCode) else { return nil }
             
             return Translation(lang: langName, translatedFromLang: fromLangName, percentTranslated: obj.perc, path: "translation/\(langName.lowercased())")
         }
+        
+        let finalObjects: [Translation] = optionalObjects.compactMap {$0}
         
         return finalObjects
     }
