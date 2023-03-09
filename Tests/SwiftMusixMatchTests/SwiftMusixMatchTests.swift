@@ -24,4 +24,16 @@ final class SwiftMusixMatchTests: XCTestCase {
         let lines = lyrics.components(separatedBy: "\n")
         XCTAssert(lines.count > 5)
     }
+    
+    func testTranslations() async throws {
+        let results = try await MusixMatchAPI.default.getSongs(for: "crystal dolphin")
+        
+        let song = results.first!
+        
+        let translations = try await song.getTranslations()
+        
+        translations.forEach { translation in
+            print("[Translations Test] \(translation.lang) (\((translation.percentTranslated*100).rounded().description)% translated)")
+        }
+    }
 }

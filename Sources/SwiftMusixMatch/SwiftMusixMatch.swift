@@ -24,6 +24,9 @@ public struct MusixMatchAPI {
         self.session = session
     }
     
+    /// Searches MusixMatch for songs.
+    /// - Parameter q: Search query.
+    /// - Returns: A list of song objects.
     public func getSongs(for q: String) async throws -> MMSearchResults {
         let url = try Builders.search(q)
         var req = URLRequest(url: url)
@@ -55,7 +58,7 @@ public struct MusixMatchAPI {
                 let url = URL(string: href, relativeTo: Builders.baseURL)?.absoluteURL
             else { return nil }
             
-            let obj = MMSearchResultItem(title: title, artist: artist, url: url)
+            let obj = MMSongItem(title: title, artist: artist, url: url)
             return obj
         }
         
@@ -68,12 +71,15 @@ public struct MusixMatchAPI {
         case couldNotGetBody
         case couldNotExtractResults
         case couldNotExtractLyrics
+        case couldNotExtractDataPayload
+        case jsonReadError
     }
 }
 
-public typealias MMSearchResults = [MMSearchResultItem]
+public typealias MMSearchResults = [MMSongItem]
 
-public struct MMSearchResultItem {
+/// A song object which lets you see basic metadata and get lyrics.
+public struct MMSongItem {
     
     public let title: String
     public let artist: String
@@ -86,15 +92,13 @@ public struct MMSearchResultItem {
         self.url = url
     }
     
-    public func getLyrics(session: URLSession = URLSession.shared) async throws -> String {
-        var req = URLRequest(url: url)
-        req.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.4 Safari/605.1.15", forHTTPHeaderField: "User-Agent")
-
-        let (data, _) = try await session.data(for: req)
-        guard let htmlStr = String(data: data, encoding: .utf8) else { throw MusixMatchAPI.MMParseError.htmlToStringFailed }
-        let html = try SwiftSoup.parse(htmlStr, url.absoluteString)
-        
-        guard let body = html.body() else { throw MusixMatchAPI.MMParseError.couldNotGetBody }
+    /// Gets the lyrics of this song
+    /// - Parameters:
+    ///   - translation: Translation to get lyrics for, leave nil to get original lyrics. Get available translations with getCommonTranslations().
+    ///   - session: The URLSession to use, for advanced use.
+    /// - Returns: Formatted lyrics string.
+    public func getLyrics(_ translation: Translation? = nil, session: URLSession = URLSession.shared) async throws -> String {
+        let body = try await getPageBody((translation != nil ? translation!.path : nil), session: session)
         
         guard
             let lyricElements = try? body.select(".mxm-lyrics__content")
@@ -109,6 +113,95 @@ public struct MMSearchResultItem {
         }
         
         return lyrics
+    }
+    
+    /// Gets all the available translations for this song.
+    /// - Parameter session: The URLSession to use, for advanced use.
+    /// - Returns: Array of Translations
+    public func getTranslations(session: URLSession = URLSession.shared) async throws -> [Translation] {
+        let body = try await getPageBody(nil, session: session)
+        
+        // theres a script tag with a ton of data. we get translations with it.
+        let scripts = try body.select("script")
+        
+        // filter out the right one
+        guard let payloadScript = scripts.filter({ element in
+            element.description.contains("};var __mxmState = ")
+        }).first else { throw MusixMatchAPI.MMParseError.couldNotExtractDataPayload }
+        
+        let cleanedPayload = payloadScript.description.dropFirst("<script>var __mxmProps = {\"pageProps\":{\"pageName\":\"track\"}};var __mxmState = ".count).dropLast(";</script>".count)
+        
+        guard let payload = cleanedPayload.data(using: .utf8) else { throw MusixMatchAPI.MMParseError.couldNotExtractDataPayload }
+        
+        // get the list of translations
+        guard
+            let json = try JSONSerialization.jsonObject(with: payload) as? Dictionary<String, Any>,
+            let lyrics = json["page"] as? [String: Any],
+            let track = lyrics["track"] as? [String: Any],
+            let translationsJson = track["lyricsTranslationStatus"] as? [[String: Any]]
+        else { throw MusixMatchAPI.MMParseError.jsonReadError }
+        
+        let translationData = try JSONSerialization.data(withJSONObject: translationsJson)
+        let translationObjects = try JSONDecoder().decode([translationObj].self, from: translationData)
+        
+        let finalObjects: [Translation] = translationObjects.compactMap { obj in
+            let engLocale = Locale(identifier: "en")
+            
+            let langSiteCodeFiltered = obj.to.filter { char in ("A"..."Z").contains(char.uppercased()) }
+            let langCode = Locale(identifier: langSiteCodeFiltered).languageCode!
+            
+            let fromLangSiteCodeFiltered = obj.to.filter { char in ("A"..."Z").contains(char.uppercased()) }
+            let fromLangCode = Locale(identifier: fromLangSiteCodeFiltered).languageCode!
+            
+            let langName = engLocale.localizedString(forLanguageCode: langCode)!
+            let fromLangName = engLocale.localizedString(forLanguageCode: fromLangCode)!
+            
+            return Translation(lang: langName, translatedFromLang: fromLangName, percentTranslated: obj.perc, path: "translation/\(langName.lowercased())")
+        }
+        
+        return finalObjects
+    }
+    
+    private struct translationObj: Codable {
+        let to: String
+        let from: String
+        let perc: Float
+    }
+    
+    internal func getPageBody(_ pathExt: String? = nil, session: URLSession) async throws -> Element {
+        let reqUrl = url.appendingPathComponent(pathExt ?? "")
+        var req = URLRequest(url: reqUrl)
+        req.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.4 Safari/605.1.15", forHTTPHeaderField: "User-Agent")
+
+        let (data, _) = try await session.data(for: req)
+        guard let htmlStr = String(data: data, encoding: .utf8) else { throw MusixMatchAPI.MMParseError.htmlToStringFailed }
+        let html = try SwiftSoup.parse(htmlStr, url.absoluteString)
+        
+        guard let body = html.body() else { throw MusixMatchAPI.MMParseError.couldNotGetBody }
+        return body
+    }
+    
+    /// Pass this to the getLyrics() function to get the lyrics in this particular language.
+    public struct Translation {
+        
+        /// This should only be used if you know a translation is available.
+        /// - Parameter lang: Language to grab.
+        public init(_ lang: String) {
+            self.init(lang: lang, translatedFromLang: "", percentTranslated: 1, path: "translation/\(lang)")
+        }
+        
+        internal init(lang: String, translatedFromLang: String, percentTranslated: Float, path: String) {
+            self.lang = lang
+            self.path = path
+            self.percentTranslated = percentTranslated
+            self.translatedFromLang = translatedFromLang
+        }
+        
+        public let lang: String
+        public let translatedFromLang: String
+        public let percentTranslated: Float
+        
+        internal let path: String
     }
 }
 
@@ -139,11 +232,11 @@ extension Character {
     var isUpperCase: Bool { return (("A"..."Z").contains(String(self))) }
 }
 
-extension MMSearchResultItem: Identifiable {
+extension MMSongItem: Identifiable {
     public var id: String { self.url.absoluteString }
 }
-extension MMSearchResultItem: Comparable {
-    public static func < (lhs: MMSearchResultItem, rhs: MMSearchResultItem) -> Bool {
+extension MMSongItem: Comparable {
+    public static func < (lhs: MMSongItem, rhs: MMSongItem) -> Bool {
         lhs.id == rhs.id
     }
 }
