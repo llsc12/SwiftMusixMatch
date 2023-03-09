@@ -103,15 +103,10 @@ public struct MMSearchResultItem {
         
         var lyrics = ""
         lyricElements.forEach { elm in
-            guard let toAdd = try? elm.children().select("span").text() else { return }
+            guard let toAdd = try? elm.children().select("span").text(trimAndNormaliseWhitespace: false) else { return }
             lyrics += toAdd
-            lyrics += " "
+            lyrics += "\n"
         }
-        
-        let lines = lyrics
-            .splitBefore(separator: { $0.isUpperCase })
-            .map{String($0).trimmingCharacters(in: .whitespacesAndNewlines)}
-        
         
         return lyrics
     }

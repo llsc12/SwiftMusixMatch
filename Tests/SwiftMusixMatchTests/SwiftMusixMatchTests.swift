@@ -12,6 +12,7 @@ final class SwiftMusixMatchTests: XCTestCase {
         for result in results {
             print(result.title)
         }
+        XCTAssert(results.count == 10)
     }
     
     func testLyrics() async throws {
@@ -21,37 +22,6 @@ final class SwiftMusixMatchTests: XCTestCase {
         
         let lyrics = try await song.getLyrics()
         let lines = lyrics.components(separatedBy: "\n")
-        print(lines§)
-    }
-    
-    
-    func testSwiftSoup() async throws {
-        let str = """
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8" />
-    <title>gm</title>
-  </head>
-  <body>
-    <p>
-      <span>
-      gm
-      this is some test
-
-      yoo its another paragraph!
-      more text
-
-      this is a new paragraph
-      gm is the best
-      </span>
-    </p>
-  </body>
-</html>
-"""
-        let doc = try parse(str)
-        let elmnt = try doc.body()?.select("span")
-        let gm = try elmnt?.text()
-        print(gm)
+        XCTAssert(lines.count > 5)
     }
 }
