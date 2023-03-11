@@ -46,9 +46,7 @@ public struct MusixMatchAPI {
             let results = try? resultsBox.select(".track-card")
         else { throw MMParseError.couldNotExtractResults }
         
-        let validResults = results.filter { $0.hasClass("has-add-lyrics") == false }
-        
-        let parsedResults: MMSearchResults = validResults.compactMap { element in
+        let parsedResults: MMSearchResults = results.compactMap { element in
             guard
                 let titleElement = try? element.select(".title"),
                 let artistElement = try? element.select(".artist"),
@@ -66,11 +64,12 @@ public struct MusixMatchAPI {
     }
     
     
-    enum MMParseError: Error {
+    public enum MMParseError: Error {
         case htmlToStringFailed
         case couldNotGetBody
         case couldNotExtractResults
         case couldNotExtractLyrics
+        case lyricsAreRestricted
         case couldNotExtractDataPayload
         case jsonReadError
     }
@@ -101,6 +100,8 @@ public struct MMSongItem {
         if let translation {
             let body = try await getPageBody(translation.path, session: session)
 
+            guard try !body.html().contains("Restricted Lyrics") else { throw MusixMatchAPI.MMParseError.lyricsAreRestricted }
+            
             guard
                 let translatedLyricsContainer = try
                     body
@@ -118,7 +119,6 @@ public struct MMSongItem {
             
             containerRows.forEach { containerRow in
                 if let innerRow = try? containerRow.select(".row>.col-xs-6.col-sm-6.col-md-6.col-ml-6.col-lg-6") {
-//                    let original = innerRow.first()
                     let translation = innerRow.last()
                     if let lyric = try? translation?.text() {
                         lyrics += lyric
@@ -131,6 +131,8 @@ public struct MMSongItem {
                     
         } else {
             let body = try await getPageBody(nil, session: session)
+            
+            guard try !body.html().contains("Restricted Lyrics") else { throw MusixMatchAPI.MMParseError.lyricsAreRestricted }
             
             guard
                 let lyricElements = try? body.select(".mxm-lyrics__content")

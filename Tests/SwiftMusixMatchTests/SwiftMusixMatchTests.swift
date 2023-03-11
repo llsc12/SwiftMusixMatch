@@ -53,4 +53,23 @@ final class SwiftMusixMatchTests: XCTestCase {
         let lines = lyrics.components(separatedBy: "\n")
         XCTAssert(lines.count > 5)
     }
+    
+    func testRestrictedLyrics() async throws {
+        let results = try await MusixMatchAPI.default.getSongs(for: "besharam rang")
+        
+        let song = results.first!
+        
+        do {
+            let lyrics = try await song.getLyrics()
+            XCTFail("This should have thrown an error.")
+        } catch {
+            XCTAssert(error as! MusixMatchAPI.MMParseError == MusixMatchAPI.MMParseError.lyricsAreRestricted)
+        }
+    }
+    
+    func testWeirdAnomaly() async throws {
+        let str = "chaska duet badal talwan jaswinder jassi"
+        let results = try await MusixMatchAPI.default.getSongs(for: str)
+        print(results)
+    }
 }
